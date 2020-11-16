@@ -7,7 +7,7 @@
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 #include <unistd.h>
- #include <time.h>
+#include <time.h>
  
 #define CAMERA_CLEAR(x) memset(&(x), 0, sizeof(x))
 
