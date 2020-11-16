@@ -113,5 +113,117 @@ errHdl:
 
 int main(int argc,char* argv[]){
 
+  if(4 != argc){
+    printf("./func /dev/video_X width height\n");
+    return -1;
+  }
+
+  unsigned int wid = (unsigned int)atoi(argv[2]); 
+  unsigned int hei = (unsigned int)atoi(argv[3]);
+
+  int fd,input,ret;
+  //open device
+  //fd = open("/dev/video0", O_RDWR);
+  fd = open(argv[1], O_RDWR);
+  if (fd == -1)
+  {
+    printf("Opening vid device %s failed!!\n",argv[1]);
+    return -1;
+  }
+  // set input
+  for (input = 0; input < 4; input++) {
+    ret = camera_input_set(fd, input);
+    if(!ret){
+      printf("%s: set csi input %d OK!\n",__func__,input);
+      break;
+    }else{
+      printf("%s: set csi input %d FAIL!\n",__func__,input);
+    }
+  }
+  //set capture mode 
+  ret = camera_param_set(fd, 0x3 ,20);
+  if(ret != 0)
+  {
+    printf("set csi stream param error!\n");
+    return -1;
+  }
+  
+  printf("[%s] set_mt w : %u , h : %u\n",__func__,wid,hei);
+
+  ret = camera_fmt_set(fd, wid, hei);
+  if(ret != 0)
+  {
+    printf("set csi res and fmt error!\n");
+    return -1;
+  }
+
+  ret = camera_buf_request(fd,1);
+  if(ret != 0)
+  {
+    printf("camera_buf_request error!\n");
+    return -1;
+  }
+
+  enum v4l2_buf_type type;
+  type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+  ret = ioctl(fd,VIDIOC_STREAMON,&type);
+  if(ret != 0)
+  {
+    printf("VIDIOC_STREAMON error!\n");
+    return -1;
+  }
+
+  struct timespec start, stop;
+
+  clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &start);
+
+  //for(;;){
+  fd_set fds;
+  FD_ZERO(&fds);
+  FD_SET(fd, &fds);
+  struct timeval tv = {0};
+  tv.tv_sec = 2;
+
+  ret = select(fd+1, &fds, NULL, NULL, &tv);
+
+  if(-1 == ret)
+  {
+    printf("select camera error,ret %d\n",ret);
+    return -1;
+  }else if(0 == ret){
+    printf("select camera timeout,ret %d\n",ret);
+	return -1;
+  }
+
+  printf("select succ . %d\n");
+
+  struct v4l2_buffer v4l2Buf;
+
+  CAMERA_CLEAR(v4l2Buf);
+
+  v4l2Buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+  v4l2Buf.memory = V4L2_MEMORY_MMAP;
+  ret = ioctl(fd, VIDIOC_DQBUF, &v4l2Buf);
+
+  if(-1 == ret){
+    printf("Retrieving Frame 1");
+    return -1;
+  }
+
+  //}
+
+  clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &stop);
+
+  long long unsigned elapsed = (stop.tv_sec - start.tv_sec)*1e9 + stop.tv_nsec - start.tv_nsec;
+
+  printf("time elapsed %llu ns %4.3f ms\n",elapsed ,elapsed/1000000.0);    // in microseconds
+
+  FILE *fp = fopen("./out.img", "wb");
+  if(fp) fwrite(buffer, v4l2Buf.bytesused,1,fp);
+  fflush(fp);
+  fclose(fp);
+ 
+  close(fd);
+
   return 0;
 }
